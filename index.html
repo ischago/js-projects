@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tiermaker</title>
+    <style>
+      :root {
+        --color-s: #ff7f80;
+        --color-a: #ffc07f;
+        --color-b: #ffdf80;
+        --color-c: #fdff7f;
+        --color-d: #bfff7f;
+        --color-e: #7fff7f;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      button {
+        border: none;
+      }
+
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Oxygen,
+          Ubuntu,
+          Cantarell,
+          "Open Sans",
+          "Helvetica Neue",
+          sans-serif;
+        background-color: #222;
+      }
+
+      #top-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        & img {
+          scale: 0.5;
+          max-width: 100%;
+        }
+      }
+
+      .tier {
+        border: 1px solid #444;
+        display: flex;
+        flex-direction: column;
+        background: #1f1f1f;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .row {
+        display: flex;
+        flex-direction: row;
+        border-bottom: 1px solid #111;
+      }
+
+      .label {
+        width: 50px;
+        height: 50px;
+        display: grid;
+        place-content: center;
+        background-color: var(--level, #48e);
+        font-weight: bold;
+      }
+
+      #selector {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin-top: 20px;
+        gap: 30px;
+      }
+
+      #selector-buttons {
+        display: flex;
+        gap: 2px;
+
+        & button,
+        & label {
+          cursor: pointer;
+          transition: all 0.3s ease;
+          background: #111;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 30px;
+          height: 30px;
+          padding: 4px;
+        }
+
+        & button:hover,
+        & label:hover {
+          scale: 1.08;
+        }
+      }
+
+      #selector-items {
+        border: 2px solid #444;
+        width: 100%;
+        max-width: 800px;
+        height: 180px;
+      }
+
+      .item-image {
+        width: 50px;
+        height: 50px;
+        object-fit: cover;
+        background: #fff;
+        cursor: grab;
+      }
+
+      .drag-over {
+        background-color: #333;
+        transition: all 0.3s ease;
+        scale: 1.008;
+      }
+
+      .drag-preview {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+    </style>
+
+    <script type="module">
+      const $ = (el) => document.querySelector(el);
+      const $$ = (el) => document.querySelectorAll(el);
+
+      const itemsSection = $("#selector-items");
+      const imageInput = $("#image-input");
+      const resetButton = $("#reset-tier-button");
+
+      const STORAGE_KEY = "tiermaker-data";
+
+      const saveToStorage = () => {
+        const data = {
+          sourceItems: Array.from(itemsSection.children).map((img) => img.src),
+          tiers: Array.from(rows).map((row) =>
+            Array.from(row.children)
+              .filter((child) => child.classList.contains("item-image"))
+              .map((img) => img.src),
+          ),
+        };
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      };
+
+      const loadFromStorage = () => {
+        try {
+          const saved = window.localStorage.getItem(STORAGE_KEY);
+          if (!saved) return false;
+
+          const data = JSON.parse(saved);
+          if (!data || !data.sourceItems || !data.tiers) return false;
+
+          data.sourceItems.forEach((src) => {
+            if (src) createImage(src);
+          });
+
+          data.tiers.forEach((tierImages, rowIndex) => {
+            if (rowIndex < rows.length) {
+              console.log({ tierImages, rowIndex });
+              tierImages.forEach((src) => {
+                if (src) {
+                  const img = createImage(src);
+                  rows[rowIndex].appendChild(img);
+                }
+              });
+            }
+          });
+
+          return true;
+        } catch (e) {
+          console.error("Failed to load from localStorage:", e);
+          return false;
+        }
+      };
+
+      const createImage = (src) => {
+        const imgElement = document.createElement("img");
+        imgElement.src = src;
+        imgElement.className = "item-image";
+
+        imgElement.addEventListener("dragstart", handleDragStart);
+        imgElement.addEventListener("dragend", handleDragEnd);
+
+        itemsSection.appendChild(imgElement);
+        return imgElement;
+      };
+
+      imageInput.addEventListener("change", (e) => {
+        const files = e.target.files;
+
+        if (files && files.length > 0) {
+          Array.from(files).forEach((file) => {
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+              createImage(event.target.result);
+              saveToStorage();
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+      });
+
+      let draggedELement = null;
+      let sourceContainer = null;
+
+      const rows = $$(".tier .row");
+
+      rows.forEach((row) => {
+        row.addEventListener("drop", handleDrop);
+        row.addEventListener("dragover", handleDragOver);
+        row.addEventListener("dragleave", handleDragLeave);
+      });
+
+      itemsSection.addEventListener("drop", handleDrop);
+      itemsSection.addEventListener("dragover", handleDragOverSource);
+      itemsSection.addEventListener("dragleave", handleDragLeaveSource);
+
+      function handleDrop(e) {
+        e.preventDefault();
+
+        const { currentTarget, dataTransfer } = e;
+
+        if (sourceContainer && draggedELement) {
+          sourceContainer.removeChild(draggedELement);
+        }
+
+        const src = dataTransfer.getData("text/plain");
+        const imgElement = createImage(src);
+
+        if (draggedELement) {
+          currentTarget.appendChild(imgElement);
+        }
+
+        const isDragPreview = $(".drag-preview");
+        if (isDragPreview) {
+          currentTarget.classList.remove("drag-preview");
+          currentTarget.removeChild(isDragPreview);
+        }
+
+        currentTarget.classList.remove("drag-over");
+        saveToStorage();
+      }
+
+      function handleDragOver(e) {
+        e.preventDefault();
+
+        const { currentTarget, dataTransfer } = e;
+        if (sourceContainer === currentTarget) return;
+
+        currentTarget.classList.add("drag-over");
+
+        const isDragPreview = $(".drag-preview");
+        if (draggedELement && !isDragPreview) {
+          const imgElement = draggedELement.cloneNode(true);
+          imgElement.classList.add("drag-preview");
+          currentTarget.appendChild(imgElement);
+        }
+      }
+
+      function handleDragLeave(e) {
+        e.preventDefault();
+
+        const { currentTarget, dataTransfer } = e;
+
+        currentTarget.classList.remove("drag-over");
+
+        const isDragPreview = $(".drag-preview");
+        if (isDragPreview) {
+          currentTarget.classList.remove("drag-preview");
+          currentTarget.removeChild(isDragPreview);
+        }
+      }
+
+      function handleDragOverSource(e) {
+        e.preventDefault();
+        const { currentTarget } = e;
+        if (sourceContainer === currentTarget) return;
+        currentTarget.classList.add("drag-over");
+      }
+
+      function handleDragLeaveSource(e) {
+        e.preventDefault();
+        const { currentTarget } = e;
+        currentTarget.classList.remove("drag-over");
+      }
+
+      function handleDragStart(e) {
+        draggedELement = e.target;
+        sourceContainer = draggedELement.parentNode;
+        e.dataTransfer.setData("text/plain", draggedELement.src);
+      }
+
+      function handleDragEnd(e) {
+        draggedELement = null;
+        sourceContainer = null;
+      }
+
+      resetButton.addEventListener("click", () => {
+        const items = $$(".tier .item-image");
+        items.forEach((item) => {
+          item.parentNode.removeChild(item);
+          itemsSection.appendChild(item);
+        });
+        window.localStorage.removeItem(STORAGE_KEY);
+      });
+
+      loadFromStorage();
+    </script>
+  </head>
+  <body>
+    <header id="top-header">
+      <img
+        src="https://tiermaker.com/images/tiermaker-logo.png"
+        alt="tiermaker Logo"
+      />
+    </header>
+
+    <section class="tier">
+      <div class="row">
+        <aside class="label" style="--level: var(--color-s)">
+          <span contenteditable="true">S</span>
+        </aside>
+      </div>
+
+      <div class="row">
+        <aside class="label" style="--level: var(--color-a)">
+          <span contenteditable="true">A</span>
+        </aside>
+      </div>
+
+      <div class="row">
+        <aside class="label" style="--level: var(--color-b)">
+          <span contenteditable="true">B</span>
+        </aside>
+      </div>
+
+      <div class="row">
+        <aside class="label" style="--level: var(--color-c)">
+          <span contenteditable="true">C</span>
+        </aside>
+      </div>
+
+      <div class="row">
+        <aside class="label" style="--level: var(--color-d)">
+          <span contenteditable="true">D</span>
+        </aside>
+      </div>
+
+      <div class="row">
+        <aside class="label" style="--level: var(--color-e)">
+          <span contenteditable="true">E</span>
+        </aside>
+      </div>
+    </section>
+
+    <footer id="selector">
+      <section id="selector-buttons">
+        <label>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#ffffff"
+            stroke-width="1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="icon icon-tabler icons-tabler-outline icon-tabler-copy-plus"
+          >
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path
+              d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"
+            />
+            <path
+              d="M4.012 16.737a2 2 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"
+            />
+            <path d="M11 14h6" />
+            <path d="M14 11v6" />
+          </svg>
+          <input
+            multiple
+            type="file"
+            accept="image/*"
+            hidden
+            id="image-input"
+          />
+        </label>
+        <button id="reset-tier-button">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#ffffff"
+            stroke-width="1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="icon icon-tabler icons-tabler-outline icon-tabler-reload"
+          >
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path
+              d="M19.933 13.041a8 8 0 1 1 -9.925 -8.788c3.899 -1 7.935 1.007 9.425 4.747"
+            />
+            <path d="M20 4v5h-5" />
+          </svg>
+        </button>
+      </section>
+      <section id="selector-items"></section>
+    </footer>
+  </body>
+</html>
