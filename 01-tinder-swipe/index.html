@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tinder Swipe</title>
+    <style>
+      *,
+      *::after,
+      *::before {
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+      }
+
+      body {
+        background-color: #f0f0f0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Oxygen,
+          Ubuntu,
+          Cantarell,
+          "Open Sans",
+          "Helvetica Neue",
+          sans-serif;
+        display: grid;
+        place-content: center;
+        min-height: 100vh;
+        user-select: none;
+        overflow: hidden;
+      }
+
+      main {
+        content: '';
+        background: url("./iphone.webp") no-repeat center;
+        background-size: contain;
+        height: 600px;
+        width: 320px;
+        display: flex;
+        filter: drop-shadow(0 0 10px #0004);
+      }
+
+      section {
+        background: #f6f6f6;
+        overflow: hidden;
+        width: 100%;
+        display: flex;
+        gap: 12px;
+        flex-direction: column;
+        border-radius: 32px;
+        position: relative;
+        padding: 16px 6px;
+        margin: 23px 28px;
+      }
+
+      header {
+        display: flex;
+        justify-content: start;
+
+        & img {
+          width: 24px;
+          height: 24px;
+        }
+      }
+
+      footer {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        padding: 0 20px;
+        justify-content: center;
+        align-items: center;
+
+        & button {
+          background: url("./tinder-icons.webp") no-repeat;
+          background-position: 0px 0px;
+          background-size: 180px;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: none;
+          cursor: pointer;
+          transition: scale 0.3s ease;
+
+          &:hover {
+            scale: 1.3;
+          }
+
+          &.is-big {
+            background-size: 270px;
+            width: 48px;
+            height: 48px;
+          }
+
+          &.is-undo {
+            background-position: -147px;
+          }
+
+          &.is-remove {
+            background-position: -165px;
+          }
+
+          &.is-star {
+            background-position: -73px;
+          }
+
+          &.is-fav {
+            background-position: -55px;
+          }
+        }
+      }
+
+      .cards {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        margin: 0 auto;
+
+        & article {
+          position: absolute;
+          overflow: hidden;
+          box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+          border-radius: 10px;
+          cursor: grab;
+          width: 100%;
+          height: 100%;
+          z-index: 2;
+
+          &.go-left,
+          &.go-right {
+            transition: transform 0.3s ease;
+          }
+
+          &.go-left {
+            transform: translateX(-150%) rotate(-20deg) !important;
+          }
+
+          &.go-right {
+            transform: translateX(150%) rotate(20deg) !important;
+          }
+
+          &.reset {
+            transition: transform 0.3s ease;
+            transform: translateX(0) rotate(0) !important;
+          }
+
+          & .choice {
+            border-radius: 8px;
+            position: absolute;
+            z-index: 999;
+            top: 30px;
+            right: 16px;
+            color: #000;
+            border: 3px solid;
+            font-weight: 700;
+            font-size: 24px;
+            padding: 4px 8px;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+
+            &.like {
+              left: 16px;
+              width: fit-content;
+              color: rgb(4, 217, 4);
+              rotate: -30deg;
+            }
+
+            &.nope {
+              rotate: 30deg;
+              color: #f00;
+            }
+          }
+
+          & img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          & h2 {
+            position: absolute;
+            inset: 0;
+            color: white;
+            display: flex;
+            align-items: end;
+            padding: 16px;
+            z-index: 3;
+            background: linear-gradient(to top, #00000088 20%, transparent 40%);
+
+            & span {
+              font-size: 0.8em;
+              margin-left: 4px;
+              line-height: 1.4;
+              font-weight: 400;
+            }
+          }
+        }
+
+        & > span {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-content: center;
+          color: #777;
+          font-size: 12px;
+          text-align: center;
+          z-index: 0;
+        }
+      }
+    </style>
+
+    <script type="module">
+      const DECISION_THRESHOLD = 75;
+
+      let isAnimating = false;
+      let pullDeltaX = 0;
+
+      function startDrag(e) {
+        if (isAnimating) return;
+
+        const actualCard = e.target.closest("article");
+        if (!actualCard) return;
+
+        const startX = e.pageX ?? e.touches[0].pageX;
+
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onEnd);
+
+        document.addEventListener("touchmove", onMove, { passive: false });
+        document.addEventListener("touchend", onEnd, { passive: false });
+
+        function onMove(e) {
+          const currentX = e.pageX ?? e.touches[0].pageX;
+          pullDeltaX = currentX - startX;
+
+          isAnimating = true;
+          if (pullDeltaX === 0) return;
+
+          const deg = pullDeltaX / 10;
+
+          actualCard.style.transform = `translateX(${pullDeltaX}px) rotate(${deg}deg)`;
+          actualCard.style.cursor = "grabbing";
+
+          const opacity = Math.abs(pullDeltaX) / 100;
+          const isRight = pullDeltaX > 0;
+
+          const choiceEl = isRight
+            ? actualCard.querySelector(".choice.like")
+            : actualCard.querySelector(".choice.nope");
+
+          choiceEl.style.opacity = opacity;
+        }
+
+        function onEnd(e) {
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onEnd);
+
+          document.removeEventListener("touchmove", onMove);
+          document.removeEventListener("touchend", onEnd);
+
+          const decisionMade = Math.abs(pullDeltaX);
+
+          if (decisionMade >= DECISION_THRESHOLD) {
+            const goRight = pullDeltaX >= 0;
+
+            actualCard.classList.add(goRight ? "go-right" : "go-left");
+            actualCard.addEventListener("transitionend", () => {
+              actualCard.remove();
+            });
+          } else {
+            actualCard.classList.add("reset");
+            actualCard.classList.remove("go-right", "go-left");
+
+            actualCard.querySelectorAll(".choice").forEach((choice) => {
+              choice.style.opacity = 0
+            });
+
+          }
+
+          actualCard.addEventListener("transitionend", () => {
+            actualCard.removeAttribute("style");
+            actualCard.classList.remove("reset");
+
+            isAnimating = false;
+            pullDeltaX = 0;
+          });
+        }
+      }
+
+      document.addEventListener("mousedown", startDrag);
+      document.addEventListener("touchstart", startDrag, { passive: false });
+    </script>
+  </head>
+  <body>
+    <main>
+      <section>
+        <header>
+          <img src="./tinder-logo.webp" alt="logo tinder" />
+        </header>
+
+        <div class="cards">
+          <article>
+            <img
+              src="./photos/2.webp"
+              alt="John Doe brown hair, blue eyes, 25 years old"
+            />
+            <h2>John Doe <span>25</span></h2>
+            <div class="choice nope">NOPE</div>
+            <div class="choice like">LIKE</div>
+          </article>
+          <article>
+            <img
+              src="./photos/1.webp"
+              alt="Leila, red hair, green eyes, 28 years old"
+            />
+            <h2>Leila <span>28</span></h2>
+            <div class="choice nope">NOPE</div>
+            <div class="choice like">LIKE</div>
+          </article>
+
+          <span>
+            No hay mas personas serca de tí...</br>
+            Vulve mas tarde
+          </span>
+
+        </div>
+
+        <footer>
+          <button class="is-undo" aria-label="undo"></button>
+          <button class="is-remove is-big" aria-label="remove"></button>
+          <button class="is-star" aria-label="star"></button>
+          <button class="is-fav is-big" aria-label="fav"></button>
+          <button class="is-zap" aria-label="zap"></button>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>
